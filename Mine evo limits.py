@@ -16,7 +16,7 @@ class MineEvoLimitsMod(loader.Module):
         "stopped": "❌ Авто-перевод остановлен",
         "done": "✅ Все переводы завершены!\n💰 Переведено {} раз по {}",
         "progress": "💸 Перевод {}/{} отправлен",
-        "usage": "❌ Используй: .addlim ник сумма количество\nПример: .addlim Player123 50000 10"
+        "usage": "❌ Используй: .addlim ник сумма количество\nПример: .addlim Player123 28O 10"
     }
     
     def __init__(self):
@@ -37,12 +37,12 @@ class MineEvoLimitsMod(loader.Module):
             return
         
         nickname = args[0]
+        amount = args[1]  # Принимаем как текст (28O, 12Bb и т.д.)
         
         try:
-            amount = int(args[1])
             count = int(args[2])
         except ValueError:
-            await utils.answer(message, self.strings["usage"])
+            await utils.answer(message, "❌ Количество должно быть числом!")
             return
         
         if self.running:
@@ -64,7 +64,6 @@ class MineEvoLimitsMod(loader.Module):
     
     async def _auto_transfer(self, message, nickname, amount, count):
         try:
-            # Ищем чат с mineEvo
             try:
                 entity = await self.client.get_entity("@mineevo")
                 chat_id = entity.id
@@ -76,16 +75,14 @@ class MineEvoLimitsMod(loader.Module):
             sent = 0
             
             while self.running and sent < count:
-                # Отправляем команду перевода
                 await self.client.send_message(chat_id, f"перевести {amount} {nickname}")
                 sent += 1
                 
                 logger.info(f"💸 Перевод {sent}/{count}: {amount} -> {nickname}")
                 await message.respond(self.strings["progress"].format(sent, count))
                 
-                # Если это не последний перевод — ждём КД
                 if sent < count and self.running:
-                    await asyncio.sleep(63)  # 62 сек КД + 1 сек запас
+                    await asyncio.sleep(63)
             
             if sent >= count:
                 await message.respond(self.strings["done"].format(count, amount))
