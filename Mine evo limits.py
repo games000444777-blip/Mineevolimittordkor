@@ -17,10 +17,9 @@ class MineEvoLimitsMod(loader.Module):
     
     strings = {
         "name": "MineEvoLimits",
-        "started": "✅ Авто-перевод запущен\n👤 Кому: {}\n💰 Сумма: {}\n⏳ КД: 62 сек",
+        "started": "✅ Авто-перевод запущен\n👤 Кому: {}\n💰 Сумма: {}\n🔄 Раз: {}\n⏳ КД: 62 сек",
         "stopped": "❌ Авто-перевод остановлен",
-        "usage": "❌ Используй: .addlim ник количество\nПример: .addlim Player123 10",
-        "no_limit": "❌ Лимит ещё не определён. Пусть игрок напишет 'лим' в чате",
+        "usage": "❌ Используй: .addlim ник сумма количество\nПример: .addlim Player123 28O 10",
         "owner_only": "⛔ Только владелец"
     }
     
@@ -62,7 +61,7 @@ class MineEvoLimitsMod(loader.Module):
     
     @loader.command()
     async def addlim(self, message):
-        """<ник> <количество> — запустить авто-перевод"""
+        """<ник> <сумма> <количество> — запустить авто-перевод"""
         user_id = (await message.get_sender()).id
         if user_id != OWNER_ID:
             await utils.answer(message, self.strings["owner_only"])
@@ -70,20 +69,17 @@ class MineEvoLimitsMod(loader.Module):
         
         args = utils.get_args_raw(message).strip().split()
         
-        if len(args) < 2:
+        if len(args) < 3:
             await utils.answer(message, self.strings["usage"])
             return
         
         nickname = args[0]
+        amount = args[1]
         
         try:
-            count = int(args[1])
+            count = int(args[2])
         except ValueError:
             await utils.answer(message, "❌ Количество должно быть числом!")
-            return
-        
-        if not self.current_limit:
-            await utils.answer(message, self.strings["no_limit"])
             return
         
         if self.running:
@@ -92,10 +88,11 @@ class MineEvoLimitsMod(loader.Module):
         
         self.running = True
         self.target_nick = nickname
+        self.current_limit = amount
         self.transfer_count = count
         self.sent_count = 0
         
-        await utils.answer(message, self.strings["started"].format(nickname, self.current_limit))
+        await utils.answer(message, self.strings["started"].format(nickname, amount, count))
         self.task = asyncio.ensure_future(self._auto_transfer(message))
     
     @loader.command()
