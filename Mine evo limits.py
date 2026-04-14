@@ -43,21 +43,38 @@ class MineEvoLimitsMod(loader.Module):
             
             logger.info(f"✅ Слежу за лимитами в чате {chat_id}")
             
-            async def process_limit(event):
+            async def process_new(event):
                 msg = event.message
                 text = msg.text or ""
-                
-                if "твой лимит на получение денег" in text.lower() and "составляет" in text.lower():
-                    match = re.search(r'составляет\s*:\s*([0-9.,]+\s*[A-Za-z]*)', text)
-                    if match:
-                        new_limit = match.group(1).strip()
-                        self.current_limit = new_limit
-                        logger.info(f"🔄 Лимит обновлён: {new_limit}")
+                logger.info(f"📨 NEW в лим-чате: {text[:150]}")
+                self._parse_limit(text)
             
-            self.client.add_event_handler(process_limit, events.NewMessage(chats=chat_id))
+            async def process_edit(event):
+                msg = event.message
+                text = msg.text or ""
+                logger.info(f"✏️ EDIT в лим-чате: {text[:150]}")
+                self._parse_limit(text)
+            
+            self.client.add_event_handler(process_new, events.NewMessage(chats=chat_id))
+            self.client.add_event_handler(process_edit, events.MessageEdited(chats=chat_id))
+            
+            logger.info("✅ Слушаю NEW и EDIT сообщения в лим-чате")
         
         except Exception as e:
             logger.error(f"❌ Ошибка слежки за лимитами: {e}")
+    
+    def _parse_limit(self, text):
+        """Парсит сумму лимита из текста"""
+        if "лимит на получение денег" in text.lower() and "составляет" in text.lower():
+            match = re.search(r'составляет\s*:\s*([0-9.,]+\s*[A-Za-z]*)', text)
+            if match:
+                new_limit = match.group(1).strip()
+                self.current_limit = new_limit
+                logger.info(f"🔄 ЛИМИТ ОБНОВЛЁН: {new_limit}")
+            else:
+                logger.error(f"❌ Не смог распарсить сумму из: {text[:150]}")
+        else:
+            logger.info(f"⏭️ Не лимит-сообщение, пропускаю")
     
     @loader.command()
     async def addlim(self, message):
@@ -112,7 +129,8 @@ class MineEvoLimitsMod(loader.Module):
     async def chek(self, message):
         """Проверить статус перевода"""
         if not self.running:
-            await utils.answer(message, "❌ Авто-перевод не запущен")
+            limit_info = f"\n💰 Текущий лимит: {self.current_limit}" if self.current_limit else "\n💰 Лимит: не определён"
+            await utils.answer(message, f"❌ Авто-перевод не запущен{limit_info}")
             return
         
         await utils.answer(message,
