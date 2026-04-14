@@ -45,36 +45,34 @@ class MineEvoLimitsMod(loader.Module):
             
             async def process_new(event):
                 msg = event.message
-                text = msg.text or ""
-                logger.info(f"📨 NEW в лим-чате: {text[:150]}")
+                text = msg.raw_text or msg.text or ""
+                logger.info(f"📨 NEW: {text[:150]}")
                 self._parse_limit(text)
             
             async def process_edit(event):
                 msg = event.message
-                text = msg.text or ""
-                logger.info(f"✏️ EDIT в лим-чате: {text[:150]}")
+                text = msg.raw_text or msg.text or ""
+                logger.info(f"✏️ EDIT: {text[:150]}")
                 self._parse_limit(text)
             
             self.client.add_event_handler(process_new, events.NewMessage(chats=chat_id))
             self.client.add_event_handler(process_edit, events.MessageEdited(chats=chat_id))
-            
-            logger.info("✅ Слушаю NEW и EDIT сообщения в лим-чате")
         
         except Exception as e:
-            logger.error(f"❌ Ошибка слежки за лимитами: {e}")
+            logger.error(f"❌ Ошибка слежки: {e}")
     
     def _parse_limit(self, text):
         """Парсит сумму лимита из текста"""
-        if "лимит на получение денег" in text.lower() and "составляет" in text.lower():
-            match = re.search(r'составляет\s*:\s*([0-9.,]+\s*[A-Za-z]*)', text)
+        text_clean = re.sub(r'<[^>]+>', '', text)
+        
+        if "лимит на получение денег" in text_clean.lower() and "составляет" in text_clean.lower():
+            match = re.search(r'составляет\s*:\s*([0-9.,]+\s*[A-Za-z]*)', text_clean)
             if match:
                 new_limit = match.group(1).strip()
                 self.current_limit = new_limit
                 logger.info(f"🔄 ЛИМИТ ОБНОВЛЁН: {new_limit}")
             else:
-                logger.error(f"❌ Не смог распарсить сумму из: {text[:150]}")
-        else:
-            logger.info(f"⏭️ Не лимит-сообщение, пропускаю")
+                logger.error(f"❌ Не распарсил: {text_clean[:150]}")
     
     @loader.command()
     async def addlim(self, message):
