@@ -37,7 +37,7 @@ class MineEvoLimitsMod(loader.Module):
             return
         
         nickname = args[0]
-        amount = args[1]  # Принимаем как текст (28O, 12Bb и т.д.)
+        amount = args[1]
         
         try:
             count = int(args[2])
@@ -75,7 +75,7 @@ class MineEvoLimitsMod(loader.Module):
             sent = 0
             
             while self.running and sent < count:
-                await self.client.send_message(chat_id, f"перевести {amount} {nickname}")
+                await self.client.send_message(chat_id, f"перевести {nickname} {amount}")
                 sent += 1
                 
                 logger.info(f"💸 Перевод {sent}/{count}: {amount} -> {nickname}")
