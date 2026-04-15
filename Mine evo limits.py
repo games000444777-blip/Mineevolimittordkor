@@ -190,7 +190,10 @@ class MineEvoLimitsMod(loader.Module):
             
             while self.running and self.sent_count < self.transfer_count:
                 if self.sent_count > 0:
-                    await asyncio.sleep(63)
+                    for i in range(63):
+                        if not self.running:
+                            break
+                        await asyncio.sleep(1)
                 
                 if not self.running:
                     break
@@ -212,6 +215,7 @@ class MineEvoLimitsMod(loader.Module):
         
         except asyncio.CancelledError:
             logger.info("Авто-перевод отменён")
+            self.running = False
         except Exception as e:
             logger.error(f"Ошибка: {e}")
             await message.respond(f"❌ Ошибка: {e}")
