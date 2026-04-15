@@ -16,7 +16,7 @@ class MineEvoLimitsMod(loader.Module):
     
     strings = {
         "name": "MineEvoLimits",
-        "started": "✅ Авто-перевод запущен\n👤 Кому: {}\n💰 Сумма: {}\n🔄 Раз: {}\n⏳ КД: 62 сек",
+        "started": "✅ Авто-перевод запущен\n👤 Кому: {}\n💰 Сумма: {}\n🔄 Раз: {}\n⏳ КД: 63 сек",
         "stopped": "❌ Авто-перевод остановлен",
         "usage": "❌ Используй: .addlim ник сумма количество\nПример: .addlim Player123 28O 10",
         "owner_only": "⛔ Только владелец",
@@ -45,8 +45,6 @@ class MineEvoLimitsMod(loader.Module):
         await self._start_watching()
     
     async def _start_watching(self):
-        """Запускает слежку за лимитами"""
-        
         for handler in self.limit_handlers:
             self.client.remove_event_handler(handler)
         self.limit_handlers = []
@@ -191,15 +189,18 @@ class MineEvoLimitsMod(loader.Module):
                 return
             
             while self.running and self.sent_count < self.transfer_count:
+                if self.sent_count > 0:
+                    await asyncio.sleep(63)
+                
+                if not self.running:
+                    break
+                
                 amount = self.current_limit
                 
                 await self.client.send_message(chat_id, f"перевести {self.target_nick} {amount}")
                 self.sent_count += 1
                 
                 logger.info(f"💸 Перевод {self.sent_count}/{self.transfer_count}: {amount} -> {self.target_nick}")
-                
-                if self.sent_count < self.transfer_count and self.running:
-                    await asyncio.sleep(63)
             
             if self.sent_count >= self.transfer_count:
                 await message.respond(
