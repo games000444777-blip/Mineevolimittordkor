@@ -57,7 +57,6 @@ class MineEvoLimitsMod(loader.Module):
                 msg = event.message
                 text = msg.raw_text or msg.text or ""
                 text_clean = re.sub(r'<[^>]+>', '', text)
-                
                 if "лимит на получение денег" in text_clean.lower() and "составляет" in text_clean.lower():
                     match = re.search(r'составляет\s*:\s*([0-9.,]+\s*[A-Za-z]*)', text_clean)
                     if match:
@@ -69,7 +68,6 @@ class MineEvoLimitsMod(loader.Module):
                 msg = event.message
                 text = msg.raw_text or msg.text or ""
                 text_clean = re.sub(r'<[^>]+>', '', text)
-                
                 if "лимит на получение денег" in text_clean.lower() and "составляет" in text_clean.lower():
                     match = re.search(r'составляет\s*:\s*([0-9.,]+\s*[A-Za-z]*)', text_clean)
                     if match:
@@ -86,6 +84,17 @@ class MineEvoLimitsMod(loader.Module):
         except Exception as e:
             logger.error(f"❌ Ошибка подключения к чату: {e}")
     
+    async def _kill_task(self):
+        """Убиваем старый таск полностью"""
+        self.running = False
+        if self.task and not self.task.done():
+            self.task.cancel()
+            try:
+                await self.task
+            except (asyncio.CancelledError, Exception):
+                pass
+        self.task = None
+    
     @loader.command()
     async def setchat(self, message):
         """<ссылка> — сменить чат для лимитов"""
@@ -95,22 +104,18 @@ class MineEvoLimitsMod(loader.Module):
             return
         
         args = utils.get_args_raw(message).strip()
-        
         if not args:
             await utils.answer(message, self.strings["chat_usage"])
             return
         
         chat_name = args.replace("https://t.me/", "").replace("http://t.me/", "").replace("@", "").strip()
-        
         if not chat_name:
             await utils.answer(message, self.strings["chat_usage"])
             return
         
         self.group_chat = chat_name
         self.db.set("MineEvoLimits", "group_chat", chat_name)
-        
         await self._start_watching()
-        
         await utils.answer(message, self.strings["chat_set"].format(chat_name))
     
     @loader.command()
@@ -122,7 +127,6 @@ class MineEvoLimitsMod(loader.Module):
             return
         
         args = utils.get_args_raw(message).strip().split()
-        
         if len(args) < 3:
             await utils.answer(message, self.strings["usage"])
             return
@@ -136,9 +140,8 @@ class MineEvoLimitsMod(loader.Module):
             await utils.answer(message, "❌ Количество должно быть числом!")
             return
         
-        if self.running:
-            await utils.answer(message, "⚠️ Уже запущен! Сначала .stoplim")
-            return
+        # Убиваем старый таск перед запуском нового
+        await self._kill_task()
         
         self.running = True
         self.target_nick = nickname
@@ -157,9 +160,7 @@ class MineEvoLimitsMod(loader.Module):
             await utils.answer(message, self.strings["owner_only"])
             return
         
-        self.running = False
-        if self.task:
-            self.task.cancel()
+        await self._kill_task()
         await utils.answer(message, self.strings["stopped"])
     
     @loader.command()
@@ -190,7 +191,7 @@ class MineEvoLimitsMod(loader.Module):
             
             while self.running and self.sent_count < self.transfer_count:
                 if self.sent_count > 0:
-                    for i in range(63):
+                    for _ in range(63):
                         if not self.running:
                             break
                         await asyncio.sleep(1)
@@ -199,13 +200,12 @@ class MineEvoLimitsMod(loader.Module):
                     break
                 
                 amount = self.current_limit
-                
                 await self.client.send_message(chat_id, f"перевести {self.target_nick} {amount}")
                 self.sent_count += 1
                 
                 logger.info(f"💸 Перевод {self.sent_count}/{self.transfer_count}: {amount} -> {self.target_nick}")
             
-            if self.sent_count >= self.transfer_count:
+            if self.running and self.sent_count >= self.transfer_count:
                 await message.respond(
                     f"✅ Все переводы завершены!\n"
                     f"💰 Переведено {self.transfer_count} раз"
@@ -214,7 +214,6 @@ class MineEvoLimitsMod(loader.Module):
             self.running = False
         
         except asyncio.CancelledError:
-            logger.info("Авто-перевод отменён")
             self.running = False
         except Exception as e:
             logger.error(f"Ошибка: {e}")
