@@ -9,7 +9,6 @@ import re
 logger = logging.getLogger(__name__)
 
 OWNER_ID = 5201054382
-GROUP_CHAT = "lolohkalim"
 
 @loader.tds
 class MineEvoLimitsMod(loader.Module):
@@ -20,7 +19,9 @@ class MineEvoLimitsMod(loader.Module):
         "started": "✅ Авто-перевод запущен\n👤 Кому: {}\n💰 Сумма: {}\n🔄 Раз: {}\n⏳ КД: 62 сек",
         "stopped": "❌ Авто-перевод остановлен",
         "usage": "❌ Используй: .addlim ник сумма количество\nПример: .addlim Player123 28O 10",
-        "owner_only": "⛔ Только владелец"
+        "owner_only": "⛔ Только владелец",
+        "chat_set": "✅ Чат для лимитов изменён на: {}",
+        "chat_usage": "❌ Используй: .setchat ссылка\nПример: .setchat https://t.me/lolohkalim"
     }
     
     def __init__(self):
@@ -30,49 +31,89 @@ class MineEvoLimitsMod(loader.Module):
         self.target_nick = None
         self.transfer_count = 0
         self.sent_count = 0
+        self.group_chat = "lolohkalim"
+        self.limit_handlers = []
     
     async def client_ready(self, client, db):
         self.client = client
         self.db = db
-        asyncio.ensure_future(self._watch_limits())
+        
+        saved_chat = self.db.get("MineEvoLimits", "group_chat", None)
+        if saved_chat:
+            self.group_chat = saved_chat
+        
+        await self._start_watching()
     
-    async def _watch_limits(self):
+    async def _start_watching(self):
+        """Запускает слежку за лимитами"""
+        
+        for handler in self.limit_handlers:
+            self.client.remove_event_handler(handler)
+        self.limit_handlers = []
+        
         try:
-            entity = await self.client.get_entity(GROUP_CHAT)
+            entity = await self.client.get_entity(self.group_chat)
             chat_id = entity.id
-            
-            logger.info(f"✅ Слежу за лимитами в чате {chat_id}")
             
             async def process_new(event):
                 msg = event.message
                 text = msg.raw_text or msg.text or ""
-                logger.info(f"📨 NEW: {text[:150]}")
-                self._parse_limit(text)
+                text_clean = re.sub(r'<[^>]+>', '', text)
+                
+                if "лимит на получение денег" in text_clean.lower() and "составляет" in text_clean.lower():
+                    match = re.search(r'составляет\s*:\s*([0-9.,]+\s*[A-Za-z]*)', text_clean)
+                    if match:
+                        new_limit = match.group(1).strip()
+                        self.current_limit = new_limit
+                        logger.info(f"🔄 Лимит обновлён: {new_limit}")
             
             async def process_edit(event):
                 msg = event.message
                 text = msg.raw_text or msg.text or ""
-                logger.info(f"✏️ EDIT: {text[:150]}")
-                self._parse_limit(text)
+                text_clean = re.sub(r'<[^>]+>', '', text)
+                
+                if "лимит на получение денег" in text_clean.lower() and "составляет" in text_clean.lower():
+                    match = re.search(r'составляет\s*:\s*([0-9.,]+\s*[A-Za-z]*)', text_clean)
+                    if match:
+                        new_limit = match.group(1).strip()
+                        self.current_limit = new_limit
+                        logger.info(f"🔄 Лимит обновлён: {new_limit}")
             
-            self.client.add_event_handler(process_new, events.NewMessage(chats=chat_id))
-            self.client.add_event_handler(process_edit, events.MessageEdited(chats=chat_id))
+            h1 = self.client.add_event_handler(process_new, events.NewMessage(chats=chat_id))
+            h2 = self.client.add_event_handler(process_edit, events.MessageEdited(chats=chat_id))
+            self.limit_handlers = [h1, h2]
+            
+            logger.info(f"✅ Слежу за лимитами в {self.group_chat}")
         
         except Exception as e:
-            logger.error(f"❌ Ошибка слежки: {e}")
+            logger.error(f"❌ Ошибка подключения к чату: {e}")
     
-    def _parse_limit(self, text):
-        """Парсит сумму лимита из текста"""
-        text_clean = re.sub(r'<[^>]+>', '', text)
+    @loader.command()
+    async def setchat(self, message):
+        """<ссылка> — сменить чат для лимитов"""
+        user_id = (await message.get_sender()).id
+        if user_id != OWNER_ID:
+            await utils.answer(message, self.strings["owner_only"])
+            return
         
-        if "лимит на получение денег" in text_clean.lower() and "составляет" in text_clean.lower():
-            match = re.search(r'составляет\s*:\s*([0-9.,]+\s*[A-Za-z]*)', text_clean)
-            if match:
-                new_limit = match.group(1).strip()
-                self.current_limit = new_limit
-                logger.info(f"🔄 ЛИМИТ ОБНОВЛЁН: {new_limit}")
-            else:
-                logger.error(f"❌ Не распарсил: {text_clean[:150]}")
+        args = utils.get_args_raw(message).strip()
+        
+        if not args:
+            await utils.answer(message, self.strings["chat_usage"])
+            return
+        
+        chat_name = args.replace("https://t.me/", "").replace("http://t.me/", "").replace("@", "").strip()
+        
+        if not chat_name:
+            await utils.answer(message, self.strings["chat_usage"])
+            return
+        
+        self.group_chat = chat_name
+        self.db.set("MineEvoLimits", "group_chat", chat_name)
+        
+        await self._start_watching()
+        
+        await utils.answer(message, self.strings["chat_set"].format(chat_name))
     
     @loader.command()
     async def addlim(self, message):
